@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { db } from "../firebase-config";
+import { db, storage } from "../firebase-config";
 import {
   collection,
   getDocs,
@@ -8,6 +8,7 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -17,12 +18,15 @@ export default function Student() {
   const [age, setAge] = useState("");
   const [birthday, setBirthday] = useState("");
   const [gender, setGender] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [progress, setProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [editing, setEditing] = useState(null);
   const [newName, setNewName] = useState("");
   const [newAge, setNewAge] = useState("");
   const [newBirthday, setNewBirthday] = useState("");
   const [newGender, setNewGender] = useState("");
+  const [newFile, setNewFile] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -38,28 +42,54 @@ export default function Student() {
       setStudents(studentList);
     };
 
-    // Check if the state passed via navigate has the refresh flag
-    if (location.state?.refresh) {
-      fetchData();
-    } else {
-      fetchData(); // Fetch students on component mount
-    }
+    fetchData();
   }, [location.state]);
 
   // Handle form submission to add a new student
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Handle image upload if a file is selected
+    if (selectedFile) {
+      const storageRef = ref(storage, `images/${selectedFile.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, selectedFile);
+
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setProgress(progress);
+        },
+        (error) => {
+          console.log(error);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          await addStudent(downloadURL); // Add student with image URL
+          console.log(downloadURL);
+        }
+      );
+    } else {
+      await addStudent(); // Add student without image
+    }
+  };
+
+  const addStudent = async (imageURL = "") => {
     try {
       await addDoc(collection(db, "students"), {
-        name: name,
-        age: age,
-        birthday: birthday,
-        gender: gender,
+        name,
+        age,
+        birthday,
+        gender,
+        image: imageURL,
       });
       setName("");
       setAge("");
       setBirthday("");
       setGender("");
+      setSelectedFile(null);
+      setProgress(0);
       navigate("/student", { state: { refresh: true } });
     } catch (error) {
       console.error("Error adding student: ", error);
@@ -89,12 +119,37 @@ export default function Student() {
   const handleUpdate = async (id) => {
     try {
       const studentDoc = doc(db, "students", id);
+
+      // Update student data without the image first
       await updateDoc(studentDoc, {
         name: newName,
         age: newAge,
         birthday: newBirthday,
         gender: newGender,
       });
+
+      // If a new file is selected, handle the file upload
+      if (newFile) {
+        const storageRef = ref(storage, `images/${newFile.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, newFile);
+
+        uploadTask.on(
+          "state_changed",
+          (snapshot) => {
+            const progress =
+              (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setProgress(progress);
+          },
+          (error) => {
+            console.log(error);
+          },
+          async () => {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            saveFileMetadata(id, downloadURL); // Save the file URL to Firestore
+          }
+        );
+      }
+
       setStudents(
         students.map((student) =>
           student.id === id
@@ -114,6 +169,17 @@ export default function Student() {
     }
   };
 
+  const saveFileMetadata = async (id, downloadURL) => {
+    try {
+      const studentDoc = doc(db, "students", id);
+      await updateDoc(studentDoc, {
+        image: downloadURL,
+      });
+    } catch (error) {
+      console.error("Error saving file metadata: ", error);
+    }
+  };
+
   // Filter students based on search term across all fields
   const filteredStudents = students.filter((student) =>
     [student.name, student.age.toString(), student.birthday, student.gender]
@@ -125,7 +191,7 @@ export default function Student() {
   return (
     <div
       className="student-container"
-      style={{ padding: "20px", margin: "10px auto", maxWidth: "600px" }}
+      style={{ padding: "20px", margin: "10px auto" }}
     >
       <h2>Student Management</h2>
 
@@ -141,6 +207,7 @@ export default function Student() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Name"
+          required
         />
         <input
           type="number"
@@ -160,6 +227,11 @@ export default function Student() {
           onChange={(e) => setGender(e.target.value)}
           placeholder="Gender"
         />
+        <input
+          type="file"
+          onChange={(e) => setSelectedFile(e.target.files[0])}
+        />
+        <p>Upload progress: {progress}%</p>
         <button type="submit">Add Student</button>
       </form>
 
@@ -175,6 +247,7 @@ export default function Student() {
         <table>
           <thead>
             <tr>
+              <th>Image</th>
               <th>Name</th>
               <th>Age</th>
               <th>Birthday</th>
@@ -185,6 +258,13 @@ export default function Student() {
           <tbody>
             {filteredStudents.map((student) => (
               <tr key={student.id}>
+                <td>
+                  <img
+                    src={student.image ? student.image : "https://via.placeholder.com/50x50"}
+                    alt={student.name}
+                    style={{ width: "50px", height: "50px" }}
+                  />
+                </td>
                 <td>
                   {editing === student.id ? (
                     <input
@@ -231,17 +311,19 @@ export default function Student() {
                 </td>
                 <td>
                   {editing === student.id ? (
-                    <button onClick={() => handleUpdate(student.id)}>
-                      Save
-                    </button>
+                    <>
+                      <input
+                        type="file"
+                        onChange={(e) => setNewFile(e.target.files[0])}
+                      />
+                      <button onClick={() => handleUpdate(student.id)}>
+                        Save
+                      </button>
+                    </>
                   ) : (
                     <>
-                      <button onClick={() => handleEdit(student)}>
-                        <FaEdit /> Edit
-                      </button>
-                      <button onClick={() => handleDelete(student.id)}>
-                        <FaTrash /> Delete
-                      </button>
+                      <FaEdit onClick={() => handleEdit(student)} />
+                      <FaTrash onClick={() => handleDelete(student.id)} />
                     </>
                   )}
                 </td>

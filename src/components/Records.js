@@ -25,7 +25,7 @@ export default function Records() {
   }, []);
 
   const record = (user) => {
-      if (user.displayName != "" || user.gender != "" || user.age != "") {
+      if (user.displayName !== "" || user.gender !== "" || user.age !== "") {
         return (
             <tr key={user.id}>
               <td>{user.displayName}</td>
@@ -37,7 +37,7 @@ export default function Records() {
   }
 
   return (
-    <div className="records-container">
+    <div className="student-list">
       <h2>User Records</h2>
       <table>
         <thead>

@@ -257,7 +257,6 @@ nav ul li button:hover {
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  max-width: 600px;
   margin: 0 auto;
 }
 
@@ -298,7 +297,6 @@ nav ul li button:hover {
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  max-width: 600px;
   margin: 0 auto;
 }
 
@@ -340,7 +338,6 @@ nav ul li button:hover {
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  max-width: 600px;
   margin: 0 auto;
 }
 
@@ -365,6 +362,7 @@ nav ul li button:hover {
 
 .profile-details input[type="text"],
 .profile-details input[type="email"],
+.profile-details input[type="number"],
 .profile-details input[type="password"] {
   width: 100%;
   padding: 10px;
@@ -415,7 +413,6 @@ nav ul li button:hover {
 .records-container {
   padding: 20px;
   margin: 20px auto;
-  max-width: 600px;
   text-align: left;
 }
 
